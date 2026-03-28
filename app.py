@@ -385,11 +385,21 @@ app.layout = html.Div(
                 ),
                 html.Div(
                     id="kpi-row",
-                    style={"display": "grid", "gridTemplateColumns": "repeat(4, 1fr)", "gap": "16px", "marginBottom": "24px"},
+                    style={
+                        "display": "grid",
+                        "gridTemplateColumns": "repeat(auto-fit, minmax(160px, 1fr))",
+                        "gap": "16px",
+                        "marginBottom": "24px",
+                    },
                 ),
                 html.Div(
                     className="dash-chart-grid-2",
-                    style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "20px", "marginBottom": "20px"},
+                    style={
+                        "display": "grid",
+                        "gridTemplateColumns": "repeat(auto-fit, minmax(300px, 1fr))",
+                        "gap": "20px",
+                        "marginBottom": "20px",
+                    },
                     children=[
                         chart_wrap(dcc.Graph(id="chart-sales-profit-year", config=PLOT_CONFIG, style={"height": "380px"})),
                         chart_wrap(dcc.Graph(id="chart-margin-trend", config=PLOT_CONFIG, style={"height": "380px"})),
@@ -397,7 +407,12 @@ app.layout = html.Div(
                 ),
                 html.Div(
                     className="dash-chart-grid-3",
-                    style={"display": "grid", "gridTemplateColumns": "1fr 1fr 1fr", "gap": "20px", "marginBottom": "20px"},
+                    style={
+                        "display": "grid",
+                        "gridTemplateColumns": "repeat(auto-fit, minmax(300px, 1fr))",
+                        "gap": "20px",
+                        "marginBottom": "20px",
+                    },
                     children=[
                         chart_wrap(dcc.Graph(id="chart-sales-segment", config=PLOT_CONFIG, style={"height": "360px"})),
                         chart_wrap(dcc.Graph(id="chart-profit-country", config=PLOT_CONFIG, style={"height": "360px"})),
@@ -406,7 +421,12 @@ app.layout = html.Div(
                 ),
                 html.Div(
                     className="dash-chart-grid-2",
-                    style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "20px", "marginBottom": "8px"},
+                    style={
+                        "display": "grid",
+                        "gridTemplateColumns": "repeat(auto-fit, minmax(300px, 1fr))",
+                        "gap": "20px",
+                        "marginBottom": "8px",
+                    },
                     children=[
                         chart_wrap(dcc.Graph(id="chart-monthly-sales", config=PLOT_CONFIG, style={"height": "380px"})),
                         chart_wrap(dcc.Graph(id="chart-scatter-discount", config=PLOT_CONFIG, style={"height": "380px"})),
