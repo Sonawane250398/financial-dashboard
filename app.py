@@ -545,5 +545,7 @@ def update_dashboard(segment, country, year_val):
     return kpis, fig_sp, fig_margin, fig_seg, fig_ct, fig_prod, fig_mo, fig_sc
 
 
+server = app.server
+
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=False)
