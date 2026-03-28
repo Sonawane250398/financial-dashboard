@@ -135,8 +135,60 @@ _DROPDOWN_CSS = """
 }
 </style>
 """
+
+_RESPONSIVE_CSS = """
+<style>
+/* Mobile: single-column grids, tighter padding, KPI 2x2, ~20% smaller type via root scale */
+@media (max-width: 768px) {
+  .dash-main-layout {
+    font-size: 80%;
+  }
+  .dash-header-bar {
+    padding: 12px 14px !important;
+  }
+  .dash-header-top {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+  }
+  .dash-header-badges {
+    width: 100%;
+    justify-content: flex-start !important;
+  }
+  .dash-content {
+    padding: 12px 12px 24px !important;
+  }
+  .dash-filter-card {
+    padding: 12px 14px !important;
+    margin-bottom: 12px !important;
+  }
+  .dash-filter-row {
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+  #kpi-row {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+    margin-bottom: 16px !important;
+  }
+  .dash-chart-grid-2,
+  .dash-chart-grid-3 {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+    margin-bottom: 12px !important;
+  }
+}
+</style>
+"""
+
+_VIEWPORT_META = '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+
 if "</head>" in app.index_string:
-    app.index_string = app.index_string.replace("</head>", _DROPDOWN_CSS + "\n</head>", 1)
+    app.index_string = app.index_string.replace(
+        "</head>",
+        _VIEWPORT_META + "\n" + _DROPDOWN_CSS + "\n" + _RESPONSIVE_CSS + "\n</head>",
+        1,
+    )
 
 segments = sorted(RAW_DF["segment"].dropna().unique().tolist())
 countries = sorted(RAW_DF["country"].dropna().unique().tolist())
@@ -180,6 +232,7 @@ def chart_wrap(graph):
 
 
 app.layout = html.Div(
+    className="dash-main-layout",
     style={
         "backgroundColor": BG,
         "minHeight": "100vh",
@@ -191,6 +244,7 @@ app.layout = html.Div(
     },
     children=[
         html.Div(
+            className="dash-header-bar",
             style={
                 "width": "100%",
                 "backgroundColor": CARD_BG,
@@ -200,6 +254,7 @@ app.layout = html.Div(
             },
             children=[
                 html.Div(
+                    className="dash-header-top",
                     style={
                         "display": "flex",
                         "flexWrap": "wrap",
@@ -227,6 +282,7 @@ app.layout = html.Div(
                             ]
                         ),
                         html.Div(
+                            className="dash-header-badges",
                             style={"display": "flex", "flexWrap": "wrap", "gap": "10px", "alignItems": "center"},
                             children=[
                                 html.Span(
@@ -269,9 +325,11 @@ app.layout = html.Div(
             ],
         ),
         html.Div(
+            className="dash-content",
             style={"padding": "24px 28px 32px", "maxWidth": "1600px", "margin": "0 auto"},
             children=[
                 html.Div(
+                    className="dash-filter-card",
                     style={
                         "backgroundColor": CARD_BG,
                         "border": f"1px solid {BORDER}",
@@ -282,6 +340,7 @@ app.layout = html.Div(
                     },
                     children=[
                         html.Div(
+                            className="dash-filter-row",
                             style={"display": "flex", "flexWrap": "wrap", "gap": "20px"},
                             children=[
                                 html.Div(
@@ -329,6 +388,7 @@ app.layout = html.Div(
                     style={"display": "grid", "gridTemplateColumns": "repeat(4, 1fr)", "gap": "16px", "marginBottom": "24px"},
                 ),
                 html.Div(
+                    className="dash-chart-grid-2",
                     style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "20px", "marginBottom": "20px"},
                     children=[
                         chart_wrap(dcc.Graph(id="chart-sales-profit-year", config=PLOT_CONFIG, style={"height": "380px"})),
@@ -336,6 +396,7 @@ app.layout = html.Div(
                     ],
                 ),
                 html.Div(
+                    className="dash-chart-grid-3",
                     style={"display": "grid", "gridTemplateColumns": "1fr 1fr 1fr", "gap": "20px", "marginBottom": "20px"},
                     children=[
                         chart_wrap(dcc.Graph(id="chart-sales-segment", config=PLOT_CONFIG, style={"height": "360px"})),
@@ -344,6 +405,7 @@ app.layout = html.Div(
                     ],
                 ),
                 html.Div(
+                    className="dash-chart-grid-2",
                     style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "20px", "marginBottom": "8px"},
                     children=[
                         chart_wrap(dcc.Graph(id="chart-monthly-sales", config=PLOT_CONFIG, style={"height": "380px"})),
