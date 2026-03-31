@@ -10,6 +10,7 @@ from dash import dcc, html, Input, Output
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+from flask_caching import Cache
 
 # --- Theme & palette (Power BI–style light) ---
 BG = "#F4F6F9"
@@ -64,10 +65,6 @@ def load_and_prepare() -> pd.DataFrame:
 
     return df
 
-
-RAW_DF = load_and_prepare()
-
-
 def apply_filters(df: pd.DataFrame, segment: str, country: str, year_val) -> pd.DataFrame:
     d = df.copy()
     if segment and segment != "all":
@@ -113,8 +110,10 @@ def plot_layout(fig: go.Figure) -> None:
 
 PLOT_CONFIG = {"displayModeBar": False, "staticPlot": False}
 
-app = dash.Dash(__name__)
+app = dash.Dash(__name__, suppress_callback_exceptions=True)
 app.title = "Financial Performance Report"
+
+cache = Cache(app.server, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 300})
 
 _DROPDOWN_CSS = """
 <style>
@@ -190,17 +189,40 @@ if "</head>" in app.index_string:
         1,
     )
 
-segments = sorted(RAW_DF["segment"].dropna().unique().tolist())
-countries = sorted(RAW_DF["country"].dropna().unique().tolist())
-year_counts = RAW_DF["year"].value_counts()
-years = sorted(year_counts[year_counts >= 100].index.tolist())
 
-_hdr_sales = RAW_DF["sales"].sum()
-_hdr_profit = RAW_DF["profit"].sum()
-_hdr_gs = RAW_DF["gross_sales"].sum()
-_hdr_margin = (_hdr_profit / _hdr_gs * 100.0) if _hdr_gs else 0.0
-_year_lo = int(RAW_DF["year"].min())
-_year_hi = int(RAW_DF["year"].max())
+@cache.memoize()
+def load_and_prepare_cached() -> pd.DataFrame:
+    return load_and_prepare()
+
+
+try:
+    RAW_DF = load_and_prepare_cached()
+    DATA_ERROR = None
+except Exception:
+    RAW_DF = None
+    DATA_ERROR = "Error loading data. Please check that financial_sample.xlsx exists."
+
+
+segments = sorted(RAW_DF["segment"].dropna().unique().tolist()) if RAW_DF is not None else []
+countries = sorted(RAW_DF["country"].dropna().unique().tolist()) if RAW_DF is not None else []
+if RAW_DF is not None:
+    year_counts = RAW_DF["year"].value_counts()
+    years = sorted(year_counts[year_counts >= 100].index.tolist())
+
+    _hdr_sales = RAW_DF["sales"].sum()
+    _hdr_profit = RAW_DF["profit"].sum()
+    _hdr_gs = RAW_DF["gross_sales"].sum()
+    _hdr_margin = (_hdr_profit / _hdr_gs * 100.0) if _hdr_gs else 0.0
+    _year_lo = int(RAW_DF["year"].min())
+    _year_hi = int(RAW_DF["year"].max())
+else:
+    years = []
+    _hdr_sales = 0.0
+    _hdr_profit = 0.0
+    _hdr_gs = 0.0
+    _hdr_margin = 0.0
+    _year_lo = 0
+    _year_hi = 0
 
 filter_style = {
     "minWidth": "200px",
@@ -231,287 +253,373 @@ def chart_wrap(graph):
     return html.Div(style=CHART_CARD, children=[graph])
 
 
-app.layout = html.Div(
-    className="dash-main-layout",
-    style={
-        "backgroundColor": BG,
-        "minHeight": "100vh",
-        "color": TEXT,
-        "fontFamily": "system-ui, -apple-system, sans-serif",
-        "margin": 0,
-        "padding": 0,
-        "boxSizing": "border-box",
-    },
-    children=[
-        html.Div(
-            className="dash-header-bar",
-            style={
-                "width": "100%",
-                "backgroundColor": CARD_BG,
-                "borderBottom": f"1px solid {BORDER}",
-                "padding": "20px 28px 14px",
-                "boxSizing": "border-box",
-            },
-            children=[
-                html.Div(
-                    className="dash-header-top",
-                    style={
-                        "display": "flex",
-                        "flexWrap": "wrap",
-                        "justifyContent": "space-between",
-                        "alignItems": "center",
-                        "gap": "20px",
-                    },
-                    children=[
-                        html.Div(
-                            children=[
-                                html.Div(
-                                    "Financial Performance Report",
-                                    style={
-                                        "fontSize": "20px",
-                                        "fontWeight": "700",
-                                        "color": TEXT,
-                                        "marginBottom": "6px",
-                                        "lineHeight": "1.25",
-                                    },
-                                ),
-                                html.Div(
-                                    f"Sales · Profit · Segments · Countries | {_year_lo}–{_year_hi}",
-                                    style={"fontSize": "12px", "color": TEXT_MUTED},
-                                ),
-                            ]
-                        ),
-                        html.Div(
-                            className="dash-header-badges",
-                            style={
-                                "display": "flex",
-                                "flexWrap": "wrap",
-                                "gap": "10px",
-                                "alignItems": "center",
-                                "justifyContent": "center",
-                                "flex": "1 1 auto",
-                            },
-                            children=[
-                                html.Span(
-                                    f"${_hdr_sales / 1e6:.2f}M Total Sales",
-                                    style={
-                                        "padding": "8px 14px",
-                                        "borderRadius": "999px",
-                                        "backgroundColor": "rgba(37, 99, 235, 0.12)",
-                                        "color": TEXT,
-                                        "fontSize": "13px",
-                                        "fontWeight": "600",
-                                    },
-                                ),
-                                html.Span(
-                                    f"${_hdr_profit / 1e6:.2f}M Profit",
-                                    style={
-                                        "padding": "8px 14px",
-                                        "borderRadius": "999px",
-                                        "backgroundColor": "rgba(5, 150, 105, 0.12)",
-                                        "color": TEXT,
-                                        "fontSize": "13px",
-                                        "fontWeight": "600",
-                                    },
-                                ),
-                                html.Span(
-                                    f"{_hdr_margin:.2f}% Margin",
-                                    style={
-                                        "padding": "8px 14px",
-                                        "borderRadius": "999px",
-                                        "backgroundColor": "rgba(124, 58, 237, 0.12)",
-                                        "color": TEXT,
-                                        "fontSize": "13px",
-                                        "fontWeight": "600",
-                                    },
-                                ),
-                            ],
-                        ),
-                        html.Div(
-                            children=[
-                                html.Div(
-                                    "Built by Yash Sonawane | Python · Dash · Plotly",
-                                    style={
-                                        "fontSize": "11px",
-                                        "color": TEXT_MUTED,
-                                        "textAlign": "right",
-                                        "fontWeight": "500",
-                                    },
-                                )
-                            ]
-                        ),
-                    ],
-                ),
-                html.Div(
-                    "Data period: 2013–2015 | Last analyzed: March 2026",
-                    style={
-                        "marginTop": "10px",
-                        "fontSize": "11px",
-                        "color": TEXT_MUTED,
-                    },
-                ),
-            ],
-        ),
-        html.Div(
-            className="dash-content",
-            style={"padding": "24px 28px 32px", "maxWidth": "1600px", "margin": "0 auto"},
-            children=[
-                html.Div(
-                    className="dash-filter-card",
-                    style={
-                        "backgroundColor": CARD_BG,
-                        "border": f"1px solid {BORDER}",
-                        "borderRadius": "12px",
-                        "boxShadow": SHADOW,
-                        "padding": "20px 22px",
-                        "marginBottom": "20px",
-                    },
-                    children=[
-                        html.Div(
-                            className="dash-filter-row",
-                            style={"display": "flex", "flexWrap": "wrap", "gap": "20px"},
-                            children=[
-                                html.Div(
-                                    style=filter_style,
-                                    children=[
-                                        html.Label("Segment", style=LABEL_UPPER),
-                                        dcc.Dropdown(
-                                            id="filter-segment",
-                                            options=[{"label": "All segments", "value": "all"}] + [{"label": s, "value": s} for s in segments],
-                                            value="all",
-                                            clearable=False,
-                                        ),
-                                    ],
-                                ),
-                                html.Div(
-                                    style=filter_style,
-                                    children=[
-                                        html.Label("Country", style=LABEL_UPPER),
-                                        dcc.Dropdown(
-                                            id="filter-country",
-                                            options=[{"label": "All countries", "value": "all"}] + [{"label": c, "value": c} for c in countries],
-                                            value="all",
-                                            clearable=False,
-                                        ),
-                                    ],
-                                ),
-                                html.Div(
-                                    style=filter_style,
-                                    children=[
-                                        html.Label("Year", style=LABEL_UPPER),
-                                        dcc.Dropdown(
-                                            id="filter-year",
-                                            options=[{"label": "All years", "value": "all"}] + [{"label": str(y), "value": y} for y in years],
-                                            value="all",
-                                            clearable=False,
-                                        ),
-                                    ],
-                                ),
-                            ],
-                        ),
-                    ],
-                ),
-                html.Div(
-                    style={
-                        "backgroundColor": CARD_BG,
-                        "border": f"1px solid {BORDER}",
-                        "borderRadius": "12px",
-                        "boxShadow": SHADOW,
-                        "padding": "18px 20px",
-                        "marginBottom": "20px",
-                    },
-                    children=[
-                        html.Div(
-                            "Insights summary",
-                            style={
-                                "fontSize": "13px",
-                                "fontWeight": "600",
-                                "color": TEXT,
-                                "marginBottom": "8px",
-                                "textTransform": "uppercase",
-                                "letterSpacing": "0.06em",
-                            },
-                        ),
-                        html.Ul(
-                            style={
-                                "margin": 0,
-                                "paddingLeft": "18px",
-                                "color": TEXT_MUTED,
-                                "fontSize": "12px",
-                                "lineHeight": "1.5",
-                            },
-                            children=[
-                                html.Li(
-                                    "Profit margin improved 8 points from 2013 to 2015 — cost efficiency drove gains"
-                                ),
-                                html.Li("United States leads all markets in absolute profit"),
-                                html.Li("Enterprise segment drives highest revenue across all years"),
-                            ],
-                        ),
-                    ],
-                ),
-                html.Div(
-                    id="kpi-row",
-                    style={
-                        "display": "grid",
-                        "gridTemplateColumns": "repeat(auto-fit, minmax(160px, 1fr))",
-                        "gap": "16px",
-                        "marginBottom": "24px",
-                    },
-                ),
-                html.Div(
-                    className="dash-chart-grid-2",
-                    style={
-                        "display": "grid",
-                        "gridTemplateColumns": "repeat(auto-fit, minmax(300px, 1fr))",
-                        "gap": "20px",
-                        "marginBottom": "20px",
-                    },
-                    children=[
-                        chart_wrap(dcc.Graph(id="chart-sales-profit-year", config=PLOT_CONFIG, style={"height": "380px"})),
-                        chart_wrap(dcc.Graph(id="chart-margin-trend", config=PLOT_CONFIG, style={"height": "380px"})),
-                    ],
-                ),
-                html.Div(
-                    className="dash-chart-grid-3",
-                    style={
-                        "display": "grid",
-                        "gridTemplateColumns": "repeat(auto-fit, minmax(300px, 1fr))",
-                        "gap": "20px",
-                        "marginBottom": "20px",
-                    },
-                    children=[
-                        chart_wrap(dcc.Graph(id="chart-sales-segment", config=PLOT_CONFIG, style={"height": "360px"})),
-                        chart_wrap(dcc.Graph(id="chart-profit-country", config=PLOT_CONFIG, style={"height": "360px"})),
-                        chart_wrap(dcc.Graph(id="chart-top-products", config=PLOT_CONFIG, style={"height": "360px"})),
-                    ],
-                ),
-                html.Div(
-                    className="dash-chart-grid-2",
-                    style={
-                        "display": "grid",
-                        "gridTemplateColumns": "repeat(auto-fit, minmax(300px, 1fr))",
-                        "gap": "20px",
-                        "marginBottom": "8px",
-                    },
-                    children=[
-                        chart_wrap(dcc.Graph(id="chart-monthly-sales", config=PLOT_CONFIG, style={"height": "380px"})),
-                        chart_wrap(dcc.Graph(id="chart-scatter-discount", config=PLOT_CONFIG, style={"height": "380px"})),
-                    ],
-                ),
-                html.Div(
-                    "Financial Performance Dashboard · Built with Python, Dash & Plotly · github.com/Sonawane250398/financial-dashboard",
-                    style={
-                        "textAlign": "center",
-                        "color": "#9CA3AF",
-                        "fontSize": "12px",
-                        "padding": "24px 8px 0",
-                    },
-                ),
-            ],
-        ),
-    ],
-)
+def _main_layout():
+    return html.Div(
+        className="dash-main-layout",
+        style={
+            "backgroundColor": BG,
+            "minHeight": "100vh",
+            "color": TEXT,
+            "fontFamily": "system-ui, -apple-system, sans-serif",
+            "margin": 0,
+            "padding": 0,
+            "boxSizing": "border-box",
+        },
+        children=[
+            html.Div(
+                className="dash-header-bar",
+                style={
+                    "width": "100%",
+                    "backgroundColor": CARD_BG,
+                    "borderBottom": f"1px solid {BORDER}",
+                    "padding": "20px 28px 14px",
+                    "boxSizing": "border-box",
+                },
+                children=[
+                    html.Div(
+                        className="dash-header-top",
+                        style={
+                            "display": "flex",
+                            "flexWrap": "wrap",
+                            "justifyContent": "space-between",
+                            "alignItems": "center",
+                            "gap": "20px",
+                        },
+                        children=[
+                            html.Div(
+                                children=[
+                                    html.Div(
+                                        "Financial Performance Report",
+                                        style={
+                                            "fontSize": "20px",
+                                            "fontWeight": "700",
+                                            "color": TEXT,
+                                            "marginBottom": "6px",
+                                            "lineHeight": "1.25",
+                                        },
+                                    ),
+                                    html.Div(
+                                        f"Sales · Profit · Segments · Countries | {_year_lo}–{_year_hi}",
+                                        style={"fontSize": "12px", "color": TEXT_MUTED},
+                                    ),
+                                ]
+                            ),
+                            html.Div(
+                                className="dash-header-badges",
+                                style={
+                                    "display": "flex",
+                                    "flexWrap": "wrap",
+                                    "gap": "10px",
+                                    "alignItems": "center",
+                                    "justifyContent": "center",
+                                    "flex": "1 1 auto",
+                                },
+                                children=[
+                                    html.Span(
+                                        f"${_hdr_sales / 1e6:.2f}M Total Sales",
+                                        style={
+                                            "padding": "8px 14px",
+                                            "borderRadius": "999px",
+                                            "backgroundColor": "rgba(37, 99, 235, 0.12)",
+                                            "color": TEXT,
+                                            "fontSize": "13px",
+                                            "fontWeight": "600",
+                                        },
+                                    ),
+                                    html.Span(
+                                        f"${_hdr_profit / 1e6:.2f}M Profit",
+                                        style={
+                                            "padding": "8px 14px",
+                                            "borderRadius": "999px",
+                                            "backgroundColor": "rgba(5, 150, 105, 0.12)",
+                                            "color": TEXT,
+                                            "fontSize": "13px",
+                                            "fontWeight": "600",
+                                        },
+                                    ),
+                                    html.Span(
+                                        f"{_hdr_margin:.2f}% Margin",
+                                        style={
+                                            "padding": "8px 14px",
+                                            "borderRadius": "999px",
+                                            "backgroundColor": "rgba(124, 58, 237, 0.12)",
+                                            "color": TEXT,
+                                            "fontSize": "13px",
+                                            "fontWeight": "600",
+                                        },
+                                    ),
+                                ],
+                            ),
+                            html.Div(
+                                children=[
+                                    html.Div(
+                                        "Built by Yash Sonawane | Python · Dash · Plotly",
+                                        style={
+                                            "fontSize": "11px",
+                                            "color": TEXT_MUTED,
+                                            "textAlign": "right",
+                                            "fontWeight": "500",
+                                        },
+                                    )
+                                ]
+                            ),
+                        ],
+                    ),
+                    html.Div(
+                        "Data period: 2013–2015 | Last analyzed: March 2026",
+                        style={
+                            "marginTop": "10px",
+                            "fontSize": "11px",
+                            "color": TEXT_MUTED,
+                        },
+                    ),
+                ],
+            ),
+            dcc.Loading(
+                type="circle",
+                color="#2563EB",
+                children=[
+                    html.Div(
+                        className="dash-content",
+                        style={"padding": "24px 28px 32px", "maxWidth": "1600px", "margin": "0 auto"},
+                        children=[
+                            html.Div(
+                                className="dash-filter-card",
+                                style={
+                                    "backgroundColor": CARD_BG,
+                                    "border": f"1px solid {BORDER}",
+                                    "borderRadius": "12px",
+                                    "boxShadow": SHADOW,
+                                    "padding": "20px 22px",
+                                    "marginBottom": "20px",
+                                },
+                                children=[
+                                    html.Div(
+                                        className="dash-filter-row",
+                                        style={"display": "flex", "flexWrap": "wrap", "gap": "20px"},
+                                        children=[
+                                            html.Div(
+                                                style=filter_style,
+                                                children=[
+                                                    html.Label("Segment", style=LABEL_UPPER),
+                                                    dcc.Dropdown(
+                                                        id="filter-segment",
+                                                        options=[{"label": "All segments", "value": "all"}]
+                                                        + [{"label": s, "value": s} for s in segments],
+                                                        value="all",
+                                                        clearable=False,
+                                                    ),
+                                                ],
+                                            ),
+                                            html.Div(
+                                                style=filter_style,
+                                                children=[
+                                                    html.Label("Country", style=LABEL_UPPER),
+                                                    dcc.Dropdown(
+                                                        id="filter-country",
+                                                        options=[{"label": "All countries", "value": "all"}]
+                                                        + [{"label": c, "value": c} for c in countries],
+                                                        value="all",
+                                                        clearable=False,
+                                                    ),
+                                                ],
+                                            ),
+                                            html.Div(
+                                                style=filter_style,
+                                                children=[
+                                                    html.Label("Year", style=LABEL_UPPER),
+                                                    dcc.Dropdown(
+                                                        id="filter-year",
+                                                        options=[{"label": "All years", "value": "all"}]
+                                                        + [{"label": str(y), "value": y} for y in years],
+                                                        value="all",
+                                                        clearable=False,
+                                                    ),
+                                                ],
+                                            ),
+                                        ],
+                                    ),
+                                    html.Div(
+                                        style={
+                                            "marginTop": "16px",
+                                            "display": "flex",
+                                            "justifyContent": "flex-start",
+                                        },
+                                        children=[
+                                            html.Button(
+                                                "Download filtered data as CSV",
+                                                id="btn-download",
+                                                n_clicks=0,
+                                                style={
+                                                    "border": f"1px solid {BLUE}",
+                                                    "backgroundColor": "transparent",
+                                                    "color": BLUE,
+                                                    "borderRadius": "999px",
+                                                    "padding": "6px 14px",
+                                                    "fontSize": "12px",
+                                                    "fontWeight": "500",
+                                                    "cursor": "pointer",
+                                                },
+                                            ),
+                                            dcc.Download(id="download-data"),
+                                        ],
+                                    ),
+                                ],
+                            ),
+                            html.Div(
+                                style={
+                                    "backgroundColor": CARD_BG,
+                                    "border": f"1px solid {BORDER}",
+                                    "borderRadius": "12px",
+                                    "boxShadow": SHADOW,
+                                    "padding": "18px 20px",
+                                    "marginBottom": "20px",
+                                },
+                                children=[
+                                    html.Div(
+                                        "Insights summary",
+                                        style={
+                                            "fontSize": "13px",
+                                            "fontWeight": "600",
+                                            "color": TEXT,
+                                            "marginBottom": "8px",
+                                            "textTransform": "uppercase",
+                                            "letterSpacing": "0.06em",
+                                        },
+                                    ),
+                                    html.Ul(
+                                        style={
+                                            "margin": 0,
+                                            "paddingLeft": "18px",
+                                            "color": TEXT_MUTED,
+                                            "fontSize": "12px",
+                                            "lineHeight": "1.5",
+                                        },
+                                        children=[
+                                            html.Li(
+                                                "Profit margin improved 8 points from 2013 to 2015 — cost efficiency drove gains"
+                                            ),
+                                            html.Li("United States leads all markets in absolute profit"),
+                                            html.Li("Enterprise segment drives highest revenue across all years"),
+                                        ],
+                                    ),
+                                ],
+                            ),
+                            html.Div(
+                                id="kpi-row",
+                                style={
+                                    "display": "grid",
+                                    "gridTemplateColumns": "repeat(auto-fit, minmax(160px, 1fr))",
+                                    "gap": "16px",
+                                    "marginBottom": "24px",
+                                },
+                            ),
+                            html.Div(
+                                className="dash-chart-grid-2",
+                                style={
+                                    "display": "grid",
+                                    "gridTemplateColumns": "repeat(auto-fit, minmax(300px, 1fr))",
+                                    "gap": "20px",
+                                    "marginBottom": "20px",
+                                },
+                                children=[
+                                    chart_wrap(
+                                        dcc.Graph(
+                                            id="chart-sales-profit-year",
+                                            config=PLOT_CONFIG,
+                                            style={"height": "380px"},
+                                        )
+                                    ),
+                                    chart_wrap(
+                                        dcc.Graph(
+                                            id="chart-margin-trend",
+                                            config=PLOT_CONFIG,
+                                            style={"height": "380px"},
+                                        )
+                                    ),
+                                ],
+                            ),
+                            html.Div(
+                                className="dash-chart-grid-3",
+                                style={
+                                    "display": "grid",
+                                    "gridTemplateColumns": "repeat(auto-fit, minmax(300px, 1fr))",
+                                    "gap": "20px",
+                                    "marginBottom": "20px",
+                                },
+                                children=[
+                                    chart_wrap(
+                                        dcc.Graph(
+                                            id="chart-sales-segment",
+                                            config=PLOT_CONFIG,
+                                            style={"height": "360px"},
+                                        )
+                                    ),
+                                    chart_wrap(
+                                        dcc.Graph(
+                                            id="chart-profit-country",
+                                            config=PLOT_CONFIG,
+                                            style={"height": "360px"},
+                                        )
+                                    ),
+                                    chart_wrap(
+                                        dcc.Graph(
+                                            id="chart-top-products",
+                                            config=PLOT_CONFIG,
+                                            style={"height": "360px"},
+                                        )
+                                    ),
+                                ],
+                            ),
+                            html.Div(
+                                className="dash-chart-grid-2",
+                                style={
+                                    "display": "grid",
+                                    "gridTemplateColumns": "repeat(auto-fit, minmax(300px, 1fr))",
+                                    "gap": "20px",
+                                    "marginBottom": "8px",
+                                },
+                                children=[
+                                    chart_wrap(
+                                        dcc.Graph(
+                                            id="chart-monthly-sales",
+                                            config=PLOT_CONFIG,
+                                            style={"height": "380px"},
+                                        )
+                                    ),
+                                    chart_wrap(
+                                        dcc.Graph(
+                                            id="chart-scatter-discount",
+                                            config=PLOT_CONFIG,
+                                            style={"height": "380px"},
+                                        )
+                                    ),
+                                ],
+                            ),
+                            html.Div(
+                                "Financial Performance Dashboard · Built with Python, Dash & Plotly · github.com/Sonawane250398/financial-dashboard",
+                                style={
+                                    "textAlign": "center",
+                                    "color": "#9CA3AF",
+                                    "fontSize": "12px",
+                                    "padding": "24px 8px 0",
+                                },
+                            ),
+                        ],
+                    )
+                ],
+            ),
+        ],
+    )
+
+
+if DATA_ERROR is not None:
+    app.layout = html.Div(
+        DATA_ERROR,
+        style={"color": "red", "padding": "20px"},
+    )
+else:
+    app.layout = _main_layout()
 
 
 def kpi_card(title: str, value: str, accent: str) -> html.Div:
@@ -555,6 +663,7 @@ def kpi_card(title: str, value: str, accent: str) -> html.Div:
 
 
 @app.callback(
+    Output("download-data", "data"),
     Output("kpi-row", "children"),
     Output("chart-sales-profit-year", "figure"),
     Output("chart-margin-trend", "figure"),
@@ -566,15 +675,19 @@ def kpi_card(title: str, value: str, accent: str) -> html.Div:
     Input("filter-segment", "value"),
     Input("filter-country", "value"),
     Input("filter-year", "value"),
+    Input("btn-download", "n_clicks"),
 )
-def update_dashboard(segment, country, year_val):
-    d = apply_filters(RAW_DF, segment, country, year_val)
+def update_dashboard(segment, country, year_val, n_clicks):
+    if RAW_DF is None:
+        d = pd.DataFrame()
+    else:
+        d = apply_filters(RAW_DF, segment, country, year_val)
 
-    total_sales = d["sales"].sum()
-    total_profit = d["profit"].sum()
-    total_gs = d["gross_sales"].sum()
+    total_sales = d["sales"].sum() if "sales" in d.columns else 0
+    total_profit = d["profit"].sum() if "profit" in d.columns else 0
+    total_gs = d["gross_sales"].sum() if "gross_sales" in d.columns else 0
     margin_agg = (total_profit / total_gs * 100.0) if total_gs else 0.0
-    units = d["units_sold"].sum()
+    units = d["units_sold"].sum() if "units_sold" in d.columns else 0
 
     kpis = [
         kpi_card("Total sales", f"${total_sales / 1e6:.2f}M", BLUE),
@@ -583,11 +696,39 @@ def update_dashboard(segment, country, year_val):
         kpi_card("Units sold", f"{units:,.0f}", AMBER),
     ]
 
+    def _empty_fig():
+        fig = go.Figure()
+        plot_layout(fig)
+        fig.add_annotation(
+            x=0.5,
+            y=0.5,
+            xref="paper",
+            yref="paper",
+            text="No data matches the selected filters — try adjusting your selections",
+            showarrow=False,
+            font=dict(size=12, color=TEXT_MUTED),
+        )
+        return fig
+
     if d.empty:
-        empty = go.Figure()
-        plot_layout(empty)
-        empty.update_layout(title=dict(text="No data for current filters"))
-        return kpis, empty, empty, empty, empty, empty, empty, empty
+        kpis_zero = [
+            kpi_card("Total sales", "$0", BLUE),
+            kpi_card("Total profit", "$0", GREEN),
+            kpi_card("Profit margin %", "0", PURPLE),
+            kpi_card("Units sold", "0", AMBER),
+        ]
+        empty_fig = _empty_fig()
+        return (
+            None,
+            kpis_zero,
+            empty_fig,
+            empty_fig,
+            empty_fig,
+            empty_fig,
+            empty_fig,
+            empty_fig,
+            empty_fig,
+        )
     # --- Sales vs Profit by Year (grouped bars) ---
     by_year = d.groupby("year", as_index=False).agg(sales=("sales", "sum"), profit=("profit", "sum"))
     by_year = by_year.sort_values("year")
@@ -729,7 +870,12 @@ def update_dashboard(segment, country, year_val):
     fig_sc.update_layout(title="Discount vs profit margin", xaxis_title="Discount ($)", yaxis_title="Profit margin %")
     plot_layout(fig_sc)
 
-    return kpis, fig_sp, fig_margin, fig_seg, fig_ct, fig_prod, fig_mo, fig_sc
+    download_data = None
+    ctx = dash.callback_context
+    if ctx.triggered and ctx.triggered[0]["prop_id"].startswith("btn-download") and not d.empty:
+        download_data = dcc.send_data_frame(d.to_csv, "financial_export.csv", index=False)
+
+    return download_data, kpis, fig_sp, fig_margin, fig_seg, fig_ct, fig_prod, fig_mo, fig_sc
 
 
 server = app.server
