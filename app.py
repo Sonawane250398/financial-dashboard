@@ -734,5 +734,24 @@ def update_dashboard(segment, country, year_val):
 
 server = app.server
 
+
+import threading
+import urllib.request
+
+
+def keep_alive():
+    import time
+    while True:
+        time.sleep(840)  # ping every 14 minutes
+        try:
+            urllib.request.urlopen("https://financial-dashboard-bu2r.onrender.com")
+            print("Keep-alive ping sent")
+        except Exception as e:
+            print(f"Keep-alive ping failed: {e}")
+
+
+t = threading.Thread(target=keep_alive, daemon=True)
+t.start()
+
 if __name__ == "__main__":
     app.run(debug=False)
