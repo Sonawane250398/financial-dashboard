@@ -249,7 +249,7 @@ app.layout = html.Div(
                 "width": "100%",
                 "backgroundColor": CARD_BG,
                 "borderBottom": f"1px solid {BORDER}",
-                "padding": "20px 28px",
+                "padding": "20px 28px 14px",
                 "boxSizing": "border-box",
             },
             children=[
@@ -283,7 +283,14 @@ app.layout = html.Div(
                         ),
                         html.Div(
                             className="dash-header-badges",
-                            style={"display": "flex", "flexWrap": "wrap", "gap": "10px", "alignItems": "center"},
+                            style={
+                                "display": "flex",
+                                "flexWrap": "wrap",
+                                "gap": "10px",
+                                "alignItems": "center",
+                                "justifyContent": "center",
+                                "flex": "1 1 auto",
+                            },
                             children=[
                                 html.Span(
                                     f"${_hdr_sales / 1e6:.2f}M Total Sales",
@@ -320,7 +327,28 @@ app.layout = html.Div(
                                 ),
                             ],
                         ),
+                        html.Div(
+                            children=[
+                                html.Div(
+                                    "Built by Yash Sonawane | Python · Dash · Plotly",
+                                    style={
+                                        "fontSize": "11px",
+                                        "color": TEXT_MUTED,
+                                        "textAlign": "right",
+                                        "fontWeight": "500",
+                                    },
+                                )
+                            ]
+                        ),
                     ],
+                ),
+                html.Div(
+                    "Data period: 2013–2015 | Last analyzed: March 2026",
+                    style={
+                        "marginTop": "10px",
+                        "fontSize": "11px",
+                        "color": TEXT_MUTED,
+                    },
                 ),
             ],
         ),
@@ -384,6 +412,45 @@ app.layout = html.Div(
                     ],
                 ),
                 html.Div(
+                    style={
+                        "backgroundColor": CARD_BG,
+                        "border": f"1px solid {BORDER}",
+                        "borderRadius": "12px",
+                        "boxShadow": SHADOW,
+                        "padding": "18px 20px",
+                        "marginBottom": "20px",
+                    },
+                    children=[
+                        html.Div(
+                            "Insights summary",
+                            style={
+                                "fontSize": "13px",
+                                "fontWeight": "600",
+                                "color": TEXT,
+                                "marginBottom": "8px",
+                                "textTransform": "uppercase",
+                                "letterSpacing": "0.06em",
+                            },
+                        ),
+                        html.Ul(
+                            style={
+                                "margin": 0,
+                                "paddingLeft": "18px",
+                                "color": TEXT_MUTED,
+                                "fontSize": "12px",
+                                "lineHeight": "1.5",
+                            },
+                            children=[
+                                html.Li(
+                                    "Profit margin improved 8 points from 2013 to 2015 — cost efficiency drove gains"
+                                ),
+                                html.Li("United States leads all markets in absolute profit"),
+                                html.Li("Enterprise segment drives highest revenue across all years"),
+                            ],
+                        ),
+                    ],
+                ),
+                html.Div(
                     id="kpi-row",
                     style={
                         "display": "grid",
@@ -433,7 +500,7 @@ app.layout = html.Div(
                     ],
                 ),
                 html.Div(
-                    "Built by Yash Sonawane · Financial Analytics Dashboard · Python · Dash · Plotly",
+                    "Financial Performance Dashboard · Built with Python, Dash & Plotly · github.com/Sonawane250398/financial-dashboard",
                     style={
                         "textAlign": "center",
                         "color": "#9CA3AF",
@@ -521,7 +588,6 @@ def update_dashboard(segment, country, year_val):
         plot_layout(empty)
         empty.update_layout(title=dict(text="No data for current filters"))
         return kpis, empty, empty, empty, empty, empty, empty, empty
-
     # --- Sales vs Profit by Year (grouped bars) ---
     by_year = d.groupby("year", as_index=False).agg(sales=("sales", "sum"), profit=("profit", "sum"))
     by_year = by_year.sort_values("year")
@@ -532,6 +598,25 @@ def update_dashboard(segment, country, year_val):
         ]
     )
     fig_sp.update_layout(barmode="group", title="Sales vs profit by year")
+    peak_year_mask = by_year["year"] == 2015
+    if peak_year_mask.any():
+        peak_sales = float(by_year.loc[peak_year_mask, "sales"].iloc[0])
+        fig_sp.add_annotation(
+            x=2015,
+            y=peak_sales,
+            text="Peak sales year",
+            showarrow=True,
+            arrowhead=2,
+            arrowsize=1,
+            arrowwidth=1,
+            arrowcolor=TEXT_MUTED,
+            ax=0,
+            ay=-40,
+            bgcolor="rgba(255,255,255,0.9)",
+            bordercolor=BORDER,
+            borderwidth=1,
+            font=dict(size=11, color=TEXT),
+        )
     plot_layout(fig_sp)
 
     # --- Profit margin % trend by year ---
@@ -551,6 +636,26 @@ def update_dashboard(segment, country, year_val):
         ]
     )
     fig_margin.update_layout(title="Profit margin % trend by year", yaxis_title="Margin %")
+    if not gy.empty:
+        idx_max = int(gy["margin_pct"].idxmax())
+        year_max = gy.loc[idx_max, "year"]
+        margin_max = float(gy.loc[idx_max, "margin_pct"])
+        fig_margin.add_annotation(
+            x=year_max,
+            y=margin_max,
+            text=f"{margin_max:.0f}% — highest margin",
+            showarrow=True,
+            arrowhead=2,
+            arrowsize=1,
+            arrowwidth=1,
+            arrowcolor=TEXT_MUTED,
+            ax=0,
+            ay=-40,
+            bgcolor="rgba(255,255,255,0.9)",
+            bordercolor=BORDER,
+            borderwidth=1,
+            font=dict(size=11, color=TEXT),
+        )
     plot_layout(fig_margin)
 
     # --- Sales by Segment (vertical bars) ---
