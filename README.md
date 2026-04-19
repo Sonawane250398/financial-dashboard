@@ -1,5 +1,8 @@
 # Financial Analytics Dashboard
 
+## Business Problem
+Finance and operations teams spend hours building static reports that are outdated the moment they are shared. This dashboard replaced that cycle — $174M in financial data across 5 segments, 5 countries, and 3 years, explorable in real time without a single manual export.
+
 An interactive financial performance dashboard built with Python, Dash, and Plotly.
 
 ## What it does
