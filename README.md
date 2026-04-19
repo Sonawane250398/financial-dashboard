@@ -31,3 +31,9 @@ Yash Sonawane · Business Analyst · yashsonawane.vercel.app
 
 ## Live Demo
 https://financial-dashboard-bu2r.onrender.com
+
+---
+
+**Yash Sonawane** — Business Analyst | Financial Data Integrity | SQL Reconciliation | Source-to-Report Validation
+
+[Portfolio](https://yashsonawane.vercel.app) · [LinkedIn](https://linkedin.com/in/yash-sonawane25)
